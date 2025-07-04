@@ -1,0 +1,38 @@
+{
+  "canisters": {
+    "health-data-exchange-backend": {
+      "type": "rust",
+      "package": "health_data_exchange_backend",
+      "candid": "src/health-data-exchange-backend/health-data-exchange-backend.did"
+    },
+    "health-data-exchange-frontend": {
+      "dependencies": [
+        "health-data-exchange-backend"
+      ],
+      "source": [
+        "src/health-data-exchange-frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "health-data-exchange-frontend"
+    },
+    "internet_identity": {
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "frontend": {},
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}

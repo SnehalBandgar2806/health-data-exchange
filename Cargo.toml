@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/health-data-exchange-backend"
+]
+resolver = "2"
