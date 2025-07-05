@@ -1,96 +1,88 @@
-import React, { useState,useEffect } from 'react';
+// ProviderDashboard.jsx
+import React, { useState, useEffect } from 'react';
 import {
   Users, FileText, Activity, Clock, Search, Filter, Download,
   Shield, AlertCircle, CheckCircle, X
 } from 'lucide-react';
 import StatCard from '../shared/StatCard';
 import { HttpAgent } from '@dfinity/agent';
-
 import { AuthClient } from '@dfinity/auth-client';
 import { createActor } from '../../../../declarations/health-data-exchange-backend';
 import { healthRecords, dataRequests } from '../../utils/mockData';
 import './provider.css';
+
 const canisterId = import.meta.env.VITE_CANISTER_ID_HEALTH_DATA_EXCHANGE_BACKEND;
 
 const ProviderDashboard = () => {
-
-
-
   const pendingRequests = dataRequests.filter(r => r.status === 'pending').length;
-
-  const [modal, setModal] = useState(null); // 'download', 'request', 'search', 'filter'
-
-  const handleClose = () => setModal(null);
-
+  const [modal, setModal] = useState(null);
   const [uploads, setUploads] = useState([]);
-  useEffect(() => {
-  const fetchUploads = async () => {
-    const authClient = await AuthClient.create();
-    const identity = await authClient.getIdentity();
-    
-    const agent = new HttpAgent({ identity });
+  const [viewedRecords, setViewedRecords] = useState({});
 
-    if (window.location.hostname === "localhost") {
-      await agent.fetchRootKey(); // ✅ Fixes signature verification error
+  useEffect(() => {
+    const fetchUploads = async () => {
+      const authClient = await AuthClient.create();
+      const identity = await authClient.getIdentity();
+      const agent = new HttpAgent({ identity });
+      if (window.location.hostname === "localhost") {
+        await agent.fetchRootKey();
+      }
+      const actor = createActor(canisterId, { agent });
+      const docs = await actor.get_uploads_for_doctor();
+      setUploads(docs);
+    };
+    fetchUploads();
+  }, []);
+
+  const handleDownload = (patient) => {
+    const matchedUpload = uploads.find(
+      (u) =>
+        u.patient_name === patient.name &&
+        Number(u.timestamp) === patient.lastVisit
+    );
+
+    if (!matchedUpload || !matchedUpload.file_content || !matchedUpload.file_name) {
+      alert("No file found");
+      return;
     }
 
-    const actor = createActor(canisterId, { agent });
-    const docs = await actor.get_uploads_for_doctor();
-    console.log(docs);
-    setUploads(docs);
+    const byteArray = Uint8Array.from(
+      atob(matchedUpload.file_content),
+      (c) => c.charCodeAt(0)
+    );
+    const blob = new Blob([byteArray]);
+    const timestamp = new Date(Number(matchedUpload.timestamp));
+    const formattedTimestamp = timestamp.toISOString().replace(/[:T]/g, '-').split('.')[0];
+    const extension = matchedUpload.file_name.includes('.') ? '' : '.txt';
+    const baseName = matchedUpload.file_name.replace(/\.[^/.]+$/, '');
+    const finalName = `${baseName}_${formattedTimestamp}${extension}`;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = finalName;
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
-
-  fetchUploads();
-}, []);
-
-
- const handleDownload = (patient) => {
-  const matchedUpload = uploads.find((u) => u.hash === patient.hash);
-  if (!matchedUpload || !matchedUpload.file_content || !matchedUpload.file_name) {
-    alert("No file found");
-    return;
-  }
-
-  const byteArray = Uint8Array.from(atob(matchedUpload.file_content), c => c.charCodeAt(0));
-  const blob = new Blob([byteArray]);
-
-  // Format timestamp as YYYY-MM-DD_HH-MM
-  const timestamp = new Date(Number(matchedUpload.timestamp));
-  const formattedTimestamp = timestamp.toISOString().replace(/[:T]/g, '-').split('.')[0]; // e.g., "2025-07-02-21-00-00"
-
-  // Construct download filename with timestamp
-  const extension = matchedUpload.file_name.includes('.') ? '' : '.txt';
-  const baseName = matchedUpload.file_name.replace(/\.[^/.]+$/, ''); // remove extension
-  const finalName = `${baseName}_${formattedTimestamp}${extension}`;
-
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = finalName;
-  link.click();
-  URL.revokeObjectURL(link.href);
-};
-
-
 
   const ModalWrapper = ({ children }) => (
     <div className="modal-overlay">
       <div className="modal-content">
-        <button className="modal-close-btn" onClick={handleClose}><X /></button>
+        <button className="modal-close-btn" onClick={() => setModal(null)}><X /></button>
         {children}
       </div>
     </div>
   );
 
   const patientData = uploads.map((doc, index) => ({
-  id: index,
-  name: doc.patient_name || 'Unknown',
-  lastVisit: Number(doc.timestamp || Date.now()),
-  dataShared: 1,
-  status: 'Active'
-}));
- const patientNames = new Set(uploads.map(doc => doc.patient_name || 'Unknown'));
-const patients = patientNames.size;
-const dataAccess = patientData.length;
+    id: index,
+    name: doc.patient_name || 'Unknown',
+    lastVisit: Number(doc.timestamp || Date.now()),
+    dataShared: 1,
+    status: 'Active'
+  }));
+
+  const patientNames = new Set(uploads.map(doc => doc.patient_name || 'Unknown'));
+  const patients = patientNames.size;
+  const dataAccess = patientData.length;
 
   return (
     <div className="space-y-6 provider-dashboard">
@@ -107,7 +99,6 @@ const dataAccess = patientData.length;
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Patient Table */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Patient Data Access</h3>
@@ -123,7 +114,7 @@ const dataAccess = patientData.length;
                 <tr className="text-left text-sm text-gray-500 border-b">
                   <th className="pb-3">Patient</th>
                   <th className="pb-3">Last Visit</th>
-                  <th className="pb-3" style={{ minWidth: '100px', maxWidth: '250px' }}>Data Shared</th>
+                  <th className="pb-3">Data Shared</th>
                   <th className="pb-3">Status</th>
                   <th className="pb-3">Actions</th>
                 </tr>
@@ -141,24 +132,24 @@ const dataAccess = patientData.length;
                         <span className="font-medium text-gray-900">{patient.name}</span>
                       </div>
                     </td>
-                   <td className="py-4 text-gray-600">
+                    <td className="py-4 text-gray-600">
                       {new Date(patient.lastVisit * 1000).toLocaleString()}
                     </td>
-
-
-
                     <td className="py-4"><span className="badge blue">{patient.dataShared} records</span></td>
                     <td className="py-4">
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center space-x-2">
                         {patient.status === 'Active' ? <CheckCircle className="icon green" /> : <Clock className="icon yellow" />}
                         <span className={`text-sm ${patient.status === 'Active' ? 'text-green-600' : 'text-yellow-600'}`}>{patient.status}</span>
+                        <button className="text-blue-600 text-xs underline ml-2" onClick={() => setViewedRecords({ ...viewedRecords, [patient.id]: true })}>View</button>
                       </div>
                     </td>
                     <td className="py-4">
-                      <button className="icon-btn" onClick={() => handleDownload(patient)} title="Download file">
-                        <Download />
-                      </button>
-
+                      <div className="flex items-center space-x-2">
+                        <button className="icon-btn" onClick={() => handleDownload(patient)} title="Download file">
+                          <Download />
+                        </button>
+                        {viewedRecords[patient.id] && <CheckCircle className="text-green-500" size={16} />}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -167,7 +158,6 @@ const dataAccess = patientData.length;
           </div>
         </div>
 
-        {/* Data Requests */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Data Requests</h3>
@@ -190,7 +180,6 @@ const dataAccess = patientData.length;
         </div>
       </div>
 
-      {/* Security Section */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Shield className="h-5 w-5 text-green-600" />
@@ -202,20 +191,6 @@ const dataAccess = patientData.length;
           <div className="info-box yellow"><AlertCircle className="icon" /> Audit Trail Enabled</div>
         </div>
       </div>
-
-      {/* Modals */}
-      {modal === 'download' && (
-        <ModalWrapper>
-          <h2 className="text-lg font-bold mb-2">Download Patient Records</h2>
-          <ul className="text-sm list-disc pl-4">
-            {healthRecords.map((r) => (
-              <li key={r.id}>
-                {r.title} - {r.provider} - ${r.value.toFixed(2)}
-              </li>
-            ))}
-          </ul>
-        </ModalWrapper>
-      )}
 
       {modal === 'request' && (
         <ModalWrapper>

@@ -39,9 +39,14 @@ import {
   Building,
   Mail
 } from 'lucide-react';
+
 import StatCard from '../shared/StatCard';
 import { researchStudies, healthRecords, researcherDataRequests } from '../../utils/mockData';
 import './researcher.css';  
+import dataDistributionImg from './data_distrbution.png';
+import qualityMetricsImg from './quality.png';
+import trendsGraphImg from './trends.png';
+
 
 const ResearcherDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -64,6 +69,30 @@ const ResearcherDashboard = () => {
     { id: 3, type: 'warning', message: 'Data request approval pending for 3 days', time: '1 day ago' }
   ]);
 
+  const timeAgo = (timestamp) => {
+  const now = new Date();
+  const created = new Date(timestamp);
+  const diffMs = now - created;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+
+  return diffHours > 0
+    ? `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    : `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+};
+
+
+  const [createdStudies, setCreatedStudies] = useState(() => {
+  const stored = localStorage.getItem('createdStudies');
+  return stored ? JSON.parse(stored) : [];
+});
+const [newStudyForm, setNewStudyForm] = useState({
+  title: '',
+  description: '',
+  participants: '',
+  duration: '3 months'
+});
+
   // Collaboration state
   const [collaborationForm, setCollaborationForm] = useState({
     institution: '',
@@ -73,6 +102,7 @@ const ResearcherDashboard = () => {
     dataTypes: []
   });
 
+  
   // Advanced search with filters
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -82,6 +112,7 @@ const ResearcherDashboard = () => {
         rec.provider.toLowerCase().includes(query) ||
         rec.description.toLowerCase().includes(query) ||
         rec.type.toLowerCase().includes(query)
+        
       );
 
       // Apply filters
@@ -225,13 +256,14 @@ const renderOverviewTab = () => (
   <div className="tab-content">
     {/* Stats Grid */}
     <div className="stats-grid">
-      <StatCard
-        title="Active Studies"
-        value={activeStudies}
-        icon={Database}
-        trend={{ value: '+2 this quarter', isPositive: true }}
-        color="purple"
-      />
+   <StatCard
+  title="Active Studies"
+  value={createdStudies.length}
+  icon={Database}
+  trend={{ value: `+${createdStudies.length} total`, isPositive: true }}
+  color="purple"
+/>
+
       <StatCard
         title="Total Participants"
         value={totalParticipants.toLocaleString()}
@@ -239,12 +271,7 @@ const renderOverviewTab = () => (
         trend={{ value: '+15.2%', isPositive: true }}
         color="blue"
       />
-      <StatCard
-        title="Recruiting"
-        value={recruitingStudies}
-        icon={UserPlus}
-        color="green"
-      />
+      
       <StatCard
         title="Data Points"
         value="2.1M"
@@ -276,6 +303,7 @@ const renderOverviewTab = () => (
         ))}
       </div>
     </div>
+    
 
     {/* Quick Actions */}
     <div className="quick-actions-grid">
@@ -306,41 +334,63 @@ const renderOverviewTab = () => (
       </button>
     </div>
 
-    {/* Recent Activity & Collaboration Requests */}
-    <div className="two-column-grid">
-      {/* Recent Activity */}
-      <div className="card">
-        <h3>Recent Activity</h3>
-        <div className="activity-list">
-          <div className="activity-item">
-            <div className="activity-dot activity-dot-green"></div>
-            <div className="activity-content">
-              <p className="activity-title">Data request approved</p>
-              <p className="activity-subtitle">
-                Cardiovascular study - 2 hours ago
-              </p>
-            </div>
-          </div>
-          <div className="activity-item">
-            <div className="activity-dot activity-dot-blue"></div>
-            <div className="activity-content">
-              <p className="activity-title">New participant enrolled</p>
-              <p className="activity-subtitle">
-                Diabetes prevention study - 4 hours ago
-              </p>
-            </div>
-          </div>
-          <div className="activity-item">
-            <div className="activity-dot activity-dot-yellow"></div>
-            <div className="activity-content">
-              <p className="activity-title">Study milestone reached</p>
-              <p className="activity-subtitle">
-                Mental health research - 1 day ago
-              </p>
-            </div>
-          </div>
-        </div>
+  {/* Recent Activity & My Research Studies */}
+<div className="two-column-grid">
+  {/* Recent Activity */}
+  <div className="card">
+    <h3></h3>
+    <div className="activity-list">
+      {/* Example activities */}
+      <div className="activity-item">
+        
       </div>
+    </div>
+
+
+  {/* ✅ My Research Studies Card */}
+  <div className="card">
+    <div className="card-header">
+      <Microscope className="icon-green" />
+      <h3>My Research Studies</h3>
+    </div>
+    <div className="studies-summary">
+      {createdStudies.length === 0 ? (
+        <p>No studies created yet. Click "New Study" to begin.</p>
+      ) : (
+        createdStudies.slice(0, 3).map((study) => (
+          <div className="study-summary-item" key={study.id}>
+            <div className="study-summary-header">
+              <h4 className="study-summary-title">{study.title}</h4>
+              <span className="study-summary-time">{timeAgo(study.createdAt)}</span>
+            </div>
+            <p className="study-summary-desc">
+              {study.description.slice(0, 80)}...
+            </p>
+            <div className="study-summary-meta">
+              <span>{study.participants} participants</span>
+              <span>{study.duration}</span>
+              <span>{study.compensation} ICP</span>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+
+   {/* ✅ View All Button */}
+{createdStudies.length > 3 && (
+  <div className="card-footer center-button">
+    <button
+      className="btn-view-all"
+      onClick={() => setActiveTab('studies')}
+    >
+      View All
+    </button>
+  </div>
+)}
+
+  </div>
+</div>
+      
 
       {/* Collaboration Requests */}
       <div className="card">
@@ -386,7 +436,7 @@ const renderOverviewTab = () => (
      <div className="studies-container">
   <div className="card">
     <div className="studies-list">
-      {researchStudies.map((study) => (
+      {[...createdStudies, ...researchStudies].map((study) => (
         <div key={study.id} className="study-item">
           <div className="study-main">
             <div className="study-header">
@@ -448,6 +498,20 @@ const renderOverviewTab = () => (
                   <button className="study-action-btn study-action-purple">
                     Analytics
                   </button>
+
+                  {createdStudies.some(s => s.id === study.id) && (
+  <button
+    className="study-action-btn study-action-red"
+    onClick={() => {
+      const updated = createdStudies.filter(s => s.id !== study.id);
+      setCreatedStudies(updated);
+      localStorage.setItem('createdStudies', JSON.stringify(updated));
+    }}
+  >
+    Delete
+  </button>
+)}
+
                 </div>
               </div>
             )}
@@ -475,65 +539,44 @@ const renderOverviewTab = () => (
     <div className="tab-content">
       <h2>Data Analytics</h2>
       
+      
       {/* Analytics Overview */}
       <div className="analytics-overview">
-        <div className="card">
-          <div className="card-header">
-            <PieChart className="icon-blue" />
-            <h3>Data Distribution</h3>
-          </div>
-          <div className="analytics-items">
-            {analyticsData.slice(0, 4).map((item, index) => (
-              <div key={index} className="analytics-item">
-                <span className="analytics-label">{item.category}</span>
-                <span className="analytics-value">{item.patients}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+ <div className="analytics-overview">
+  <div className="card">
+    <div className="card-header">
+      <PieChart className="icon-blue" />
+      <h3>Data Distribution</h3>
+    </div>
+    <div className="analytics-chart">
+      <img src={dataDistributionImg} alt="Data Distribution" className="chart-img" />
+    </div>
+  </div>
 
-        <div className="card">
-          <div className="card-header">
-            <Activity className="icon-green" />
-            <h3>Quality Metrics</h3>
-          </div>
-          <div className="analytics-items">
-            <div className="analytics-item">
-              <span className="analytics-label">High Quality</span>
-              <span className="analytics-value quality-high">78%</span>
-            </div>
-            <div className="analytics-item">
-              <span className="analytics-label">Medium Quality</span>
-              <span className="analytics-value quality-medium">18%</span>
-            </div>
-            <div className="analytics-item">
-              <span className="analytics-label">Low Quality</span>
-              <span className="analytics-value quality-low">4%</span>
-            </div>
-          </div>
-        </div>
+  <div className="card">
+    <div className="card-header">
+      <Activity className="icon-green" />
+      <h3>Quality Metrics</h3>
+    </div>
+    <div className="analytics-chart">
+      <img src={qualityMetricsImg} alt="Quality Metrics" className="chart-img" />
+    </div>
+  </div>
 
-        <div className="card">
-          <div className="card-header">
-            <TrendingUp className="icon-purple" />
-            <h3>Trends</h3>
-          </div>
-          <div className="analytics-items">
-            <div className="analytics-item">
-              <span className="analytics-label">Data Requests</span>
-              <span className="analytics-value trend-up">↑ 23%</span>
-            </div>
-            <div className="analytics-item">
-              <span className="analytics-label">Participants</span>
-              <span className="analytics-value trend-up">↑ 15%</span>
-            </div>
-            <div className="analytics-item">
-              <span className="analytics-label">Completion Rate</span>
-              <span className="analytics-value trend-neutral">↑ 8%</span>
-            </div>
-          </div>
-        </div>
+  <div className="card">
+    <div className="card-header">
+      <TrendingUp className="icon-purple" />
+      <h3>Trends</h3>
+    </div>
+    <div className="analytics-chart">
+      <img src={trendsGraphImg} alt="Trends Graph" className="chart-img" />
+    </div>
+  </div>
+</div>
+
+
       </div>
+      
 
     {/* Detailed Analytics */}
 <div className="card">
@@ -551,6 +594,8 @@ const renderOverviewTab = () => (
             </span>
           </div>
         </div>
+
+        
 
         <div className="category-details">
           <span>Completion: {item.completion}%</span>
@@ -941,80 +986,117 @@ const renderDataRequestsTab = () => (
         </div>
       )}
 
-      {/* New Study Modal */}
-      {modal === 'newStudy' && (
-        <div className="modal-overlay">
-          <div className="modal modal-medium">
-            <div className="modal-header">
-              <h2>Create New Study</h2>
-              <button
-                onClick={() => setModal(null)}
-                className="modal-close"
-              >
-                <X className="close-icon" />
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Study Title</label>
-                <input
-                  type="text"
-                  placeholder="Enter study title"
-                  className="form-input"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label className="form-label">Description</label>
-                <textarea
-                  rows={4}
-                  placeholder="Describe your research study..."
-                  className="form-textarea"
-                />
-              </div>
+{/* New Study Modal */}
+{modal === 'newStudy' && (
+  <div className="modal-overlay">
+    <div className="modal modal-medium">
+      <div className="modal-header">
+        <h2>Create New Study</h2>
+        <button
+          onClick={() => setModal(null)}
+          className="modal-close"
+        >
+          <X className="close-icon" />
+        </button>
+      </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Target Participants</label>
-                  <input
-                    type="number"
-                    placeholder="1000"
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Duration</label>
-                  <select className="form-select">
-                    <option>3 months</option>
-                    <option>6 months</option>
-                    <option>1 year</option>
-                    <option>2 years</option>
-                  </select>
-                </div>
-              </div>
+      <div className="modal-body">
+        <div className="form-group">
+          <label className="form-label">Study Title</label>
+          <input
+            id="study-title"
+            type="text"
+            placeholder="Enter study title"
+            className="form-input"
+            value={newStudyForm.title}
+            onChange={(e) => setNewStudyForm({ ...newStudyForm, title: e.target.value })}
+          />
+        </div>
 
-              <div className="modal-footer">
-                <button
-                  onClick={() => setModal(null)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    alert('Study created successfully!');
-                    setModal(null);
-                  }}
-                  className="btn-primary"
-                >
-                  Create Study
-                </button>
-              </div>
-            </div>
+        <div className="form-group">
+          <label className="form-label">Description</label>
+          <textarea
+            id="study-description"
+            rows={4}
+            placeholder="Describe your research study..."
+            className="form-textarea"
+            value={newStudyForm.description}
+            onChange={(e) => setNewStudyForm({ ...newStudyForm, description: e.target.value })}
+          />
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Target Participants</label>
+            <input
+              id="study-participants"
+              type="number"
+              placeholder="1000"
+              className="form-input"
+              value={newStudyForm.participants}
+              onChange={(e) => setNewStudyForm({ ...newStudyForm, participants: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Duration</label>
+            <select
+              id="study-duration"
+              className="form-select"
+              value={newStudyForm.duration}
+              onChange={(e) => setNewStudyForm({ ...newStudyForm, duration: e.target.value })}
+            >
+              <option>3 months</option>
+              <option>6 months</option>
+              <option>1 year</option>
+              <option>2 years</option>
+            </select>
           </div>
         </div>
-      )}
+
+        <div className="modal-footer">
+          <button
+            onClick={() => setModal(null)}
+            className="btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            className="btn-primary"
+            disabled={!newStudyForm.title || !newStudyForm.description}
+            onClick={() => {
+              const newStudy = {
+                id: Date.now().toString(),
+                title: newStudyForm.title,
+                description: newStudyForm.description,
+                participants: newStudyForm.participants,
+                duration: newStudyForm.duration,
+                compensation: Math.floor(Math.random() * 10 + 1),
+                status: 'active',
+                createdAt: new Date().toISOString()
+              };
+
+              const updatedStudies = [newStudy, ...createdStudies];
+              setCreatedStudies(updatedStudies);
+              localStorage.setItem('createdStudies', JSON.stringify(updatedStudies));
+
+              // Reset form & close modal
+              setNewStudyForm({
+                title: '',
+                description: '',
+                participants: '',
+                duration: '6 months'
+              });
+              setModal(null);
+            }}
+          >
+            Create Study
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 };

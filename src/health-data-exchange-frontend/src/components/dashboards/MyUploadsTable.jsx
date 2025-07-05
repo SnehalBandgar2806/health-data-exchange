@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState,forwardRef,useImperativeHandle } from 'react';
 import './myUploads.css';
 import { createActor } from '../../../../declarations/health-data-exchange-backend'; // ✅ your correct path
 import { AuthClient } from "@dfinity/auth-client";
@@ -9,39 +9,53 @@ const canisterId = import.meta.env.VITE_CANISTER_ID_HEALTH_DATA_EXCHANGE_BACKEND
 
 
 
-const MyUploadsTable = () => {
+const MyUploadsTable = forwardRef(({ onUploadCountChange, onEarningsChange }, ref) => {
   const [uploads, setUploads] = useState([]);
   const [errorOccurred, setErrorOccurred] = useState(false);
   const [loading, setLoading] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(null);
 
   const fetchUploads = async () => {
-  try {
-    setLoading(true);
-    const actor = await getActor();
-    const data = await actor.get_my_uploads();
-    setUploads(data);
-    setErrorOccurred(false);
-  } catch (err) {
-    console.error("Error fetching uploads:", err);
-    setErrorOccurred(true);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      setLoading(true);
+      const actor = await getActor();
+      const data = await actor.get_my_uploads();
+      setUploads(data);
+      setErrorOccurred(false);
+   if (onUploadCountChange) {
+  onUploadCountChange(data.length); // Total document count
+}
+
+if (onEarningsChange) {
+  const total = data.reduce((sum, item) => sum + Number(item.earning_icp || 0), 0);
+  onEarningsChange(total);
+}
+ // <-- Send count to parent
+    } catch (err) {
+      console.error("Error fetching uploads:", err);
+      setErrorOccurred(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+  refreshUploads: fetchUploads
+}));
+
 
   useEffect(() => {
     fetchUploads();
   }, []);
 
   const downloadBase64File = (base64, filename) => {
-  const link = document.createElement("a");
-  link.href = `data:application/octet-stream;base64,${base64}`;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
+    const link = document.createElement("a");
+    link.href = `data:application/octet-stream;base64,${base64}`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleDelete = async (hash) => {
     try {
@@ -79,6 +93,7 @@ const MyUploadsTable = () => {
   };
 
   return (
+    <div className="outer-wrapper">
     <div className="uploads-table-wrapper">
       <h3>My Uploaded Documents</h3>
 
@@ -178,7 +193,8 @@ const MyUploadsTable = () => {
         </table>
       )}
     </div>
+    </div>
   );
-};
+});
 
 export default MyUploadsTable;
