@@ -3,6 +3,11 @@ use crate::models::{User, UploadBlock, UserPublic};
 use crate::storage::{USERS, UPLOAD_CHAINS};
 use sha2::{Sha256, Digest};
 use candid::Principal;
+use crate::models::DataRequest;
+use crate::storage::DATA_REQUESTS;
+use crate::models::ResearchStudy;
+use crate::storage::RESEARCH_STUDIES;
+use ic_cdk_macros::{update, query};
 
 fn current_timestamp() -> u64 {
     time() / 1_000_000_000
@@ -18,6 +23,48 @@ fn calculate_hash(index: u64, timestamp: u64, file_name: &str, doc_type: &str, s
     hasher.update(previous_hash);
     format!("{:x}", hasher.finalize())
 }
+
+pub fn submit_data_request(request: DataRequest) {
+    ic_cdk::println!(
+    "📩 New request submitted for recipients: {:?}", 
+    request.recipients
+);
+
+    DATA_REQUESTS.with(|reqs| reqs.borrow_mut().push(request));
+}
+
+pub fn get_data_requests_by_email(email: String) -> Vec<DataRequest> {
+    DATA_REQUESTS.with(|reqs| {
+        reqs.borrow()
+            .iter()
+            .filter(|r| r.recipients.contains(&email) && !r.requester_email.is_empty()) // skip malformed
+            .cloned()
+            .collect()
+    })
+}
+
+pub fn get_sent_requests_by_email(email: String) -> Vec<DataRequest> {
+    DATA_REQUESTS.with(|reqs| {
+        reqs.borrow()
+            .iter()
+            .filter(|r| r.requester_email == email)
+            .cloned()
+            .collect()
+    })
+}
+
+pub fn update_data_request_status(id: String, new_status: String) -> Result<(), String> {
+    DATA_REQUESTS.with(|requests| {
+        let mut reqs = requests.borrow_mut();
+        if let Some(req) = reqs.iter_mut().find(|r| r.id == id) {
+            req.status = new_status;
+            Ok(())
+        } else {
+            Err("Request not found".to_string())
+        }
+    })
+}
+
 
 pub fn upload_document(
     file_name: String,
@@ -89,6 +136,22 @@ pub fn get_my_uploads() -> Vec<UploadBlock> {
     let principal = caller();
     UPLOAD_CHAINS.with(|chains| {
         chains.borrow().get(&principal).cloned().unwrap_or_default()
+    })
+}
+
+pub fn get_all_collaborators() -> Vec<UserPublic> {
+    USERS.with(|users| {
+        users
+            .borrow()
+            .iter()
+            .filter(|(_, u)| u.role == "provider" || u.role == "researcher")
+            .map(|(p, u)| UserPublic {
+                name: u.name.clone(),
+                email: u.email.clone(),
+                role: u.role.clone(),
+                principal: Some(*p),
+            })
+            .collect()
     })
 }
 
@@ -195,4 +258,39 @@ pub fn fix_existing_doctors() {
             }
         }
     });
+}
+
+pub fn add_study_for_user(study: ResearchStudy) -> Result<(), String> {
+    let principal = caller();
+    RESEARCH_STUDIES.with(|studies| {
+        let mut map = studies.borrow_mut();
+        let entry = map.entry(principal).or_insert(Vec::new());
+        entry.push(study);
+        Ok(())
+    })
+}
+
+pub fn get_studies_by_user() -> Vec<ResearchStudy> {
+    let principal = caller();
+    RESEARCH_STUDIES.with(|studies| {
+        studies.borrow().get(&principal).cloned().unwrap_or_default()
+    })
+}
+
+pub fn delete_study_by_id(study_id: String) -> Result<(), String> {
+    let principal = caller();
+    RESEARCH_STUDIES.with(|studies| {
+        let mut map = studies.borrow_mut();
+        if let Some(user_studies) = map.get_mut(&principal) {
+            let len_before = user_studies.len();
+            user_studies.retain(|study| study.id != study_id);
+            let len_after = user_studies.len();
+            if len_before != len_after {
+                return Ok(());
+            } else {
+                return Err("Study not found".to_string());
+            }
+        }
+        Err("No studies found".to_string())
+    })
 }

@@ -1,13 +1,11 @@
-use candid::CandidType;
-use candid::Principal;
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
-use ic_cdk::api::time;
 
 #[derive(Clone, Debug, CandidType, Deserialize, Serialize)]
 pub struct User {
     pub name: String,
     pub email: String,
-    pub role: String, // "doctor", "patient", "admin"
+    pub role: String,
     pub principal: Principal,
 }
 
@@ -31,7 +29,7 @@ pub struct UploadBlock {
     pub earning_icp: u64,
     pub hash: String,
     pub previous_hash: String,
-    pub patient_name: String, 
+    pub patient_name: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,4 +41,29 @@ pub struct UploadRecord {
     pub doctor: String,
     pub earning: u32,
     pub timestamp: u64,
+}
+
+#[derive(Clone, Debug, CandidType, Deserialize, Serialize)]
+pub struct DataRequest {
+    pub id: String,
+    pub requester_name: String,
+    pub requester_email: String,
+    pub recipients: Vec<String>,
+    pub data_type: String,
+    pub purpose: String,
+    pub message: String,
+    pub compensation: String,
+    pub status: String,
+    pub date: String,
+}
+
+#[derive(Clone, Debug, CandidType, Deserialize, Serialize)]
+pub struct ResearchStudy {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub participants: String,
+    pub duration: String,
+    pub compensation: String,
+    pub created_at: String,
 }

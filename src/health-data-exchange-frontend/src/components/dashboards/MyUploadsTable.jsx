@@ -1,10 +1,9 @@
 import React, { useEffect, useState,forwardRef,useImperativeHandle } from 'react';
-import './myUploads.css';
-import { createActor } from '../../../../declarations/health-data-exchange-backend'; // ✅ your correct path
+import './myUploads.css'; // ✅ your correct path
 import { AuthClient } from "@dfinity/auth-client";
 import { Trash2 } from 'lucide-react';
 import { getActor } from '../../utils/actorUtils';
-
+import { createActor } from '../../../../declarations/health-data-exchange-backend';
 const canisterId = import.meta.env.VITE_CANISTER_ID_HEALTH_DATA_EXCHANGE_BACKEND; // ✅ your correct env var
 
 
@@ -193,7 +192,7 @@ if (onEarningsChange) {
         </table>
       )}
     </div>
-    </div>
+  </div>
   );
 });
 

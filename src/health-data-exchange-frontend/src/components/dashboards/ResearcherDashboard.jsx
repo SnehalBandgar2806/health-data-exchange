@@ -1,4 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useRef } from 'react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  LineChart,
+  Line,
+} from 'recharts';
 import { 
   Database, 
   Users, 
@@ -24,7 +36,8 @@ import {
   Settings,
   Share2,
   BookOpen,
-  PieChart,
+  PieChart as PieChartIcon,
+
   Activity,
   Microscope,
   X,
@@ -39,22 +52,37 @@ import {
   Building,
   Mail
 } from 'lucide-react';
-
 import StatCard from '../shared/StatCard';
 import { researchStudies, healthRecords, researcherDataRequests } from '../../utils/mockData';
 import './researcher.css';  
-import dataDistributionImg from './data_distrbution.png';
-import qualityMetricsImg from './quality.png';
-import trendsGraphImg from './trends.png';
+import { Principal } from '@dfinity/principal';
+import { createActor } from '../../../../declarations/health-data-exchange-backend';
 
 
-const ResearcherDashboard = () => {
+const ResearcherDashboard = ({ currentUser, showModal, setShowModal }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [modal, setModal] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedSources, setSelectedSources] = useState([]);
   const [compensation, setCompensation] = useState('');
+  const [collaborationRequest, setCollaborationRequest] = useState([]);
+  const [researcherDataRequests, setResearcherDataRequests] = useState(() => {
+  const stored = localStorage.getItem('researcherDataRequests');
+  return stored ? JSON.parse(stored) : [];
+});
+const [expandedRequestId, setExpandedRequestId] = useState(null);
+
+
+  function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref.current;
+}
+
+
   const [filters, setFilters] = useState({
     ageRange: '',
     gender: '',
@@ -62,12 +90,65 @@ const ResearcherDashboard = () => {
     dateRange: '',
     dataQuality: ''
   });
+
+const [collaborationForm, setCollaborationForm] = useState({
+  institution: '',
+  contactEmail: '',
+  studyTitle: '',
+  message: '',
+  dataTypes: [],
+  collaborators: []  // array of principals
+});
+const [collaborators, setCollaborators] = useState([]);
+const [searchCollaborators, setSearchCollaborators] = useState('');
+
+useEffect(() => {
+  const fetchCollaborators = async () => {
+    try {
+      const collaborators = await icp_health_backend.get_all_collaborators();
+      console.log("Fetched collaborators:", collaborators); // <== check this
+      setCollaborators(collaborators);
+    } catch (err) {
+      console.error("Error fetching collaborators:", err);
+    }
+  };
+  fetchCollaborators();
+}, []);
+
+
+
+const toggleCollaborator = (email) => {
+  setCollaborationForm((prevForm) => {
+    const isSelected = prevForm.collaborators.includes(email);
+    const updated = isSelected
+      ? prevForm.collaborators.filter(e => e !== email)
+      : [...prevForm.collaborators, email];
+
+    return {
+      ...prevForm,
+      collaborators: updated,
+    };
+  });
+};
+
+
+
   const [expandedStudy, setExpandedStudy] = useState(null);
   const [notifications, setNotifications] = useState([
     { id: 1, type: 'success', message: 'New cardiovascular dataset available', time: '2 hours ago' },
     { id: 2, type: 'info', message: 'Study "Diabetes Prevention" reached 80% completion', time: '4 hours ago' },
     { id: 3, type: 'warning', message: 'Data request approval pending for 3 days', time: '1 day ago' }
   ]);
+
+  const [form, setForm] = useState({
+  studyTitle: '',
+  reason: '',
+  ageRange: '',
+  gender: '',
+  dataQuality: '',
+  format: '',
+  deadline: '',
+});
 
   const timeAgo = (timestamp) => {
   const now = new Date();
@@ -82,10 +163,7 @@ const ResearcherDashboard = () => {
 };
 
 
-  const [createdStudies, setCreatedStudies] = useState(() => {
-  const stored = localStorage.getItem('createdStudies');
-  return stored ? JSON.parse(stored) : [];
-});
+ const [createdStudies, setCreatedStudies] = useState([]);
 const [newStudyForm, setNewStudyForm] = useState({
   title: '',
   description: '',
@@ -94,13 +172,7 @@ const [newStudyForm, setNewStudyForm] = useState({
 });
 
   // Collaboration state
-  const [collaborationForm, setCollaborationForm] = useState({
-    institution: '',
-    contactEmail: '',
-    studyTitle: '',
-    message: '',
-    dataTypes: []
-  });
+  
 
   
   // Advanced search with filters
@@ -135,29 +207,74 @@ const [newStudyForm, setNewStudyForm] = useState({
   };
 
   const handleSubmitRequest = () => {
-    if (!compensation || selectedSources.length === 0) {
-      alert('Please fill all required fields');
+  const {
+    studyTitle,
+    reason,
+    ageRange,
+    gender,
+    dataQuality,
+    format,
+    deadline
+  } = form;
+
+  if (!studyTitle || !reason || !format || !deadline) {
+    alert('Please fill all required fields: Study Title, Reason, Format, and Deadline');
+    return;
+  }
+
+  const newRequest = {
+    id: Date.now().toString(),
+    requesterName: 'Current Researcher',
+    requesterType: 'researcher',
+    studyTitle,
+    reason,
+    ageRange,
+    gender,
+    dataQuality,
+    format,
+    deadline,
+    dataSourcesRequested: [],          // You can change this based on your flow
+    dataSourcesReceived: [],
+    status: 'pending',
+    compensation: '5',                // Default or input-driven
+    date: new Date().toISOString().split('T')[0]
+  };
+
+  const updatedRequests = [...researcherDataRequests, newRequest];
+  setResearcherDataRequests(updatedRequests);
+  localStorage.setItem('researcherDataRequests', JSON.stringify(updatedRequests));
+
+  alert('Data request submitted successfully!');
+  setModal(null);
+  setForm({
+    studyTitle: '',
+    reason: '',
+    ageRange: '',
+    gender: '',
+    dataQuality: '',
+    format: '',
+    deadline: ''
+  });
+};
+
+
+
+  useEffect(() => {
+  const fetchRequests = async () => {
+    if (typeof icp_health_backend.get_all_requests_for_user !== 'function') {
+      console.warn('get_all_requests_for_user not implemented');
       return;
     }
-    
-    const newRequest = {
-      id: Date.now().toString(),
-      requesterName: 'Current Researcher',
-      requesterType: 'researcher',
-      dataSourcesRequested: selectedSources.map(id => 
-        healthRecords.find(r => r.id === id)?.title || 'Unknown'
-      ),
-      dataSourcesReceived: [],
-      status: 'pending',
-      compensation,
-      date: new Date().toISOString().split('T')[0]
-    };
-    
-    console.log('Submitting request:', newRequest);
-    alert('Data request submitted successfully!');
-    setModal(null);
-    resetSearchForm();
+
+    const data = await icp_health_backend.get_all_requests_for_user(currentUser?.email);
+    setCollaborationRequests(data);
   };
+
+  fetchRequests();
+}, []);
+
+
+
 
   const resetSearchForm = () => {
     setSearchQuery('');
@@ -173,23 +290,52 @@ const [newStudyForm, setNewStudyForm] = useState({
     });
   };
 
-  const handleCollaborationSubmit = () => {
-    if (!collaborationForm.institution || !collaborationForm.contactEmail || !collaborationForm.studyTitle) {
-      alert('Please fill all required fields');
-      return;
-    }
-    
-    console.log('Submitting collaboration request:', collaborationForm);
-    alert('Collaboration request sent successfully! We will contact you within 2-3 business days.');
-    setModal(null);
-    setCollaborationForm({
-      institution: '',
-      contactEmail: '',
-      studyTitle: '',
-      message: '',
-      dataTypes: []
-    });
+  useEffect(() => {
+  const savedRequests = localStorage.getItem('collabRequests');
+  if (savedRequests) {
+    setCollaborationRequest(JSON.parse(savedRequests));
+  }
+}, []);
+
+ const handleCollaborationSubmit = () => {
+  if (!collaborationForm.institution || !collaborationForm.contactEmail || !collaborationForm.studyTitle) {
+    alert('Please fill all required fields');
+    return;
+  }
+
+  const newRequest = {
+    id: Date.now(),
+    from: currentUser?.name || 'Anonymous',
+    to: collaborationForm.collaborators.join(', '), // <-- Add this line
+    study: collaborationForm.studyTitle,
+    message: collaborationForm.message || '',
+    collaborators: collaborationForm.collaborators,
+    institution: collaborationForm.institution,
+    email: collaborationForm.contactEmail,
+    dataTypes: collaborationForm.dataTypes,
+    type: 'sent',
   };
+
+  
+  const updatedRequests = [...collaborationRequest, newRequest];
+  setCollaborationRequest(updatedRequests);
+  localStorage.setItem('collabRequests', JSON.stringify(updatedRequests));
+
+  setCollaborationForm({
+    institution: '',
+    contactEmail: '',
+    studyTitle: '',
+    message: '',
+    dataTypes: [],
+    collaborators: [],
+  });
+
+  setShowModal(false);
+  alert('Collaboration request sent successfully!');
+};
+
+
+
 
   const toggleDataType = (dataType) => {
     setCollaborationForm(prev => ({
@@ -202,7 +348,9 @@ const [newStudyForm, setNewStudyForm] = useState({
 
   // Mock data for advanced features
   const activeStudies = researchStudies.filter(s => s.status === 'active').length;
-  const totalParticipants = researchStudies.reduce((sum, s) => sum + s.participants, 0);
+  const totalParticipants = Array.isArray(createdStudies)
+  ? createdStudies.reduce((sum, study) => sum + Number(study.participants || 0), 0)
+  : 0;
   const recruitingStudies = researchStudies.filter(s => s.status === 'recruiting').length;
 
   const analyticsData = [
@@ -235,22 +383,7 @@ const [newStudyForm, setNewStudyForm] = useState({
     }
   ];
 
-  const collaborationRequests = [
-    {
-      id: 1,
-      from: "Dr. Sarah Chen - Stanford Medical",
-      study: "Multi-center Cardiovascular Study",
-      message: "Would like to collaborate on patient outcome analysis",
-      status: "pending"
-    },
-    {
-      id: 2,
-      from: "Research Team - Mayo Clinic",
-      study: "Diabetes Prevention Initiative",
-      message: "Interested in sharing anonymized datasets",
-      status: "pending"
-    }
-  ];
+  
 
 const renderOverviewTab = () => (
   <div className="tab-content">
@@ -260,7 +393,7 @@ const renderOverviewTab = () => (
   title="Active Studies"
   value={createdStudies.length}
   icon={Database}
-  trend={{ value: `+${createdStudies.length} total`, isPositive: true }}
+  trend={`{ value: +${createdStudies.length} total, isPositive: true }`}
   color="purple"
 />
 
@@ -268,17 +401,18 @@ const renderOverviewTab = () => (
         title="Total Participants"
         value={totalParticipants.toLocaleString()}
         icon={Users}
-        trend={{ value: '+15.2%', isPositive: true }}
         color="blue"
       />
       
       <StatCard
-        title="Data Points"
-        value="2.1M"
-        icon={BarChart3}
-        trend={{ value: '+8.7%', isPositive: true }}
+        title="Collaborations"
+        value={collaborationRequest.length.toLocaleString()}
+        icon={UserPlus}
+        trend={{ value: `+${collaborationRequest.length}`, isPositive: true }}
         color="yellow"
       />
+
+      
     </div>
 
     {/* AI-Powered Insights */}
@@ -308,11 +442,11 @@ const renderOverviewTab = () => (
     {/* Quick Actions */}
     <div className="quick-actions-grid">
       <button
-        onClick={() => setModal('dataSearch')}
+        onClick={() => setModal('dataRequest')}
         className="action-btn action-btn-blue"
       >
         <Search className="action-icon" />
-        <span>Search Data</span>
+        <span>Data Request</span>
       </button>
       <button
         onClick={() => setModal('newStudy')}
@@ -394,27 +528,41 @@ const renderOverviewTab = () => (
 
       {/* Collaboration Requests */}
       <div className="card">
-        <h3>Collaboration Requests</h3>
-        <div className="collaboration-list">
-          {collaborationRequests.map((request) => (
-            <div key={request.id} className="collaboration-item">
-              <div className="collaboration-content">
-                <p className="collaboration-from">{request.from}</p>
-                <p className="collaboration-study">{request.study}</p>
-                <p className="collaboration-message">{request.message}</p>
-              </div>
-              <div className="collaboration-actions">
-                <button className="collaboration-btn collaboration-btn-approve">
-                  <CheckCircle className="collaboration-icon" />
-                </button>
-                <button className="collaboration-btn collaboration-btn-reject">
-                  <X className="collaboration-icon" />
-                </button>
-              </div>
-            </div>
-          ))}
+  <h3>Collaboration Requests</h3>
+  <div className="collaboration-list">
+    {collaborationRequest.map((request) => (
+      <div key={request.id} className="collaboration-item">
+        <div className="collaboration-content">
+          <p className="collaboration-from">
+  {request.type === 'sent' 
+    ? `To: ${request.to}` 
+    : `From: ${request.from}`}
+  <span className="request-type-tag">
+    {request.type === 'sent' ? ' (Sent)' : ' (Received)'}
+  </span>
+</p>
+
+          <p className="collaboration-study">{request.study}</p>
+          <p className="collaboration-message">{request.message}</p>
         </div>
+
+        {/* Only show buttons for "received" requests */}
+        {request.type !== 'sent' && (
+          <div className="collaboration-actions">
+            <button className="collaboration-btn collaboration-btn-approve">
+              <CheckCircle className="collaboration-icon" />
+            </button>
+            <button className="collaboration-btn collaboration-btn-reject">
+              <X className="collaboration-icon" />
+            </button>
+          </div>
+        )}
       </div>
+    ))}
+  </div>
+</div>
+
+
     </div>
   </div>
 );
@@ -436,98 +584,98 @@ const renderOverviewTab = () => (
      <div className="studies-container">
   <div className="card">
     <div className="studies-list">
-      {[...createdStudies, ...researchStudies].map((study) => (
-        <div key={study.id} className="study-item">
-          <div className="study-main">
-            <div className="study-header">
-              <button
-                onClick={() =>
-                  setExpandedStudy(expandedStudy === study.id ? null : study.id)
-                }
-                className="expand-btn"
-              >
-                {expandedStudy === study.id ? (
-                  <ChevronDown className="expand-icon" />
-                ) : (
-                  <ChevronRight className="expand-icon" />
-                )}
-              </button>
-              <h4 className="study-title">{study.title}</h4>
-              <span className={`status-badge status-${study.status}`}>
-                {study.status}
-              </span>
-            </div>
-            <p className="study-description">{study.description}</p>
+{[...createdStudies, ...researchStudies].map((study) => (
+  <div key={study.id} className="study-item">
+    <div className="study-main">
+      <div className="study-header">
+        <button
+          onClick={() =>
+            setExpandedStudy(expandedStudy === study.id ? null : study.id)
+          }
+          className="expand-btn"
+        >
+          {expandedStudy === study.id ? (
+            <ChevronDown className="expand-icon" />
+          ) : (
+            <ChevronRight className="expand-icon" />
+          )}
+        </button>
+        <h4 className="study-title">{study.title}</h4>
+        <span className={`status-badge status-${study.status}`}>
+          {study.status}
+        </span>
+      </div>
+      <p className="study-description">{study.description}</p>
 
-            {expandedStudy === study.id && (
-              <div className="study-expanded">
-                <div className="study-metrics">
-                  <div className="metric">
-                    <p className="metric-label">Progress</p>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{ width: '65%' }}
-                      ></div>
-                    </div>
-                    <p className="metric-value">65% Complete</p>
-                  </div>
-                  <div className="metric">
-                    <p className="metric-label">Data Quality</p>
-                    <div className="rating">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <Star
-                          key={i}
-                          className={`star ${i <= 4 ? 'star-filled' : 'star-empty'}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="metric">
-                    <p className="metric-label">Last Updated</p>
-                    <p className="metric-value">2 hours ago</p>
-                  </div>
-                </div>
-                <div className="study-actions">
-                  <button className="study-action-btn study-action-blue">
-                    View Details
-                  </button>
-                  <button className="study-action-btn study-action-green">
-                    Export Data
-                  </button>
-                  <button className="study-action-btn study-action-purple">
-                    Analytics
-                  </button>
-
-                  {createdStudies.some(s => s.id === study.id) && (
-  <button
-    className="study-action-btn study-action-red"
-    onClick={() => {
-      const updated = createdStudies.filter(s => s.id !== study.id);
-      setCreatedStudies(updated);
-      localStorage.setItem('createdStudies', JSON.stringify(updated));
-    }}
-  >
-    Delete
-  </button>
-)}
-
-                </div>
+      {expandedStudy === study.id && (
+        <div className="study-expanded">
+          <div className="study-metrics">
+            <div className="metric">
+              <p className="metric-label">Progress</p>
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: '65%' }}
+                ></div>
               </div>
-            )}
-          </div>
-          <div className="study-info">
-            <div className="study-stats">
-              <span className="study-stat">
-                <Users className="study-stat-icon" />
-                <span>{study.participants.toLocaleString()}</span>
-              </span>
-              <span className="study-duration">{study.duration}</span>
+              <p className="metric-value">65% Complete</p>
             </div>
-            <p className="study-compensation">{study.compensation} ICP</p>
+            <div className="metric">
+              <p className="metric-label">Data Quality</p>
+              <div className="rating">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star
+                    key={i}
+                    className={`star ${i <= 4 ? 'star-filled' : 'star-empty'}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="metric">
+              <p className="metric-label">Last Updated</p>
+              <p className="metric-value">2 hours ago</p>
+            </div>
+          </div>
+          <div className="study-actions">
+            <button className="study-action-btn study-action-blue">
+              View Details
+            </button>
+            <button className="study-action-btn study-action-green">
+              Export Data
+            </button>
+            <button className="study-action-btn study-action-purple">
+              Analytics
+            </button>
+
+            {createdStudies.some(s => s.id === study.id) && (
+              <button
+                className="study-action-btn study-action-red"
+                onClick={() => {
+                  const updated = createdStudies.filter(s => s.id !== study.id);
+                  setCreatedStudies(updated);
+                  localStorage.setItem('createdStudies', JSON.stringify(updated));
+                }}
+              >
+                Delete
+              </button>
+            )}
+
           </div>
         </div>
-      ))}
+      )}
+    </div>
+    <div className="study-info">
+      <div className="study-stats">
+        <span className="study-stat">
+          <Users className="study-stat-icon" />
+          <span>{study.participants.toLocaleString()}</span>
+        </span>
+        <span className="study-duration">{study.duration}</span>
+      </div>
+      <p className="study-compensation">{study.compensation} ICP</p>
+    </div>
+  </div>
+))}
     </div>
   </div>
 </div>
@@ -535,96 +683,139 @@ const renderOverviewTab = () => (
     </div>
   );
 
-  const renderAnalyticsTab = () => (
-    <div className="tab-content">
-      <h2>Data Analytics</h2>
-      
-      
-      {/* Analytics Overview */}
-      <div className="analytics-overview">
- <div className="analytics-overview">
-  <div className="card">
-    <div className="card-header">
-      <PieChart className="icon-blue" />
-      <h3>Data Distribution</h3>
-    </div>
-    <div className="analytics-chart">
-      <img src={dataDistributionImg} alt="Data Distribution" className="chart-img" />
-    </div>
-  </div>
+  const renderAnalyticsTab = (analyticsData) => (
+    
+  <div className="tab-content">
+    <h2>Data Analytics</h2>
 
-  <div className="card">
-    <div className="card-header">
-      <Activity className="icon-green" />
-      <h3>Quality Metrics</h3>
-    </div>
-    <div className="analytics-chart">
-      <img src={qualityMetricsImg} alt="Quality Metrics" className="chart-img" />
-    </div>
-  </div>
+    {/* Analytics Overview */}
+    <div className="analytics-overview">
 
-  <div className="card">
-    <div className="card-header">
-      <TrendingUp className="icon-purple" />
-      <h3>Trends</h3>
-    </div>
-    <div className="analytics-chart">
-      <img src={trendsGraphImg} alt="Trends Graph" className="chart-img" />
-    </div>
-  </div>
-</div>
-
-
+      {/* Data Distribution */}
+      <div className="card">
+        <div className="card-header">
+          <PieChartIcon className="icon-blue" />
+          <h3>Data Distribution</h3>
+        </div>
+        <div className="analytics-items">
+          <PieChart width={300} height={250}>
+            <Pie
+              data={analyticsData.slice(0, 4)}
+              dataKey="patients"
+              nameKey="category"
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              fill="#8884d8"
+              label
+            >
+              {analyticsData.slice(0, 4).map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={['#2563eb', '#10b981', '#f59e0b', '#ef4444'][index % 4]}
+                />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </div>
       </div>
-      
+
+      {/* Quality Metrics */}
+      <div className="card">
+        <div className="card-header">
+          <Activity className="icon-green" />
+          <h3>Quality Metrics</h3>
+        </div>
+        <div className="analytics-items">
+          <BarChart width={300} height={200} data={[
+            { label: 'High', value: 78 },
+            { label: 'Medium', value: 18 },
+            { label: 'Low', value: 4 }
+          ]}>
+            <XAxis dataKey="label" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="value">
+              <Cell fill="#22c55e" />
+              <Cell fill="#facc15" />
+              <Cell fill="#ef4444" />
+            </Bar>
+          </BarChart>
+        </div>
+      </div>
+
+      {/* Trends */}
+      <div className="card">
+        <div className="card-header">
+          <TrendingUp className="icon-purple" />
+          <h3>Trends</h3>
+        </div>
+        <div className="analytics-items">
+          <LineChart width={300} height={200} data={[
+            { metric: 'Data Requests', value: 23 },
+            { metric: 'Participants', value: 15 },
+            { metric: 'Completion Rate', value: 8 }
+          ]}>
+            <XAxis dataKey="metric" />
+            <YAxis />
+            <Tooltip />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="#6366f1"
+              strokeWidth={2}
+            />
+          </LineChart>
+        </div>
+      </div>
+
+    </div>
 
     {/* Detailed Analytics */}
-<div className="card">
-  <h3>Category Analysis</h3>
-  <div className="category-analysis">
-    {analyticsData.map((item, index) => (
-      <div key={index} className="category-item">
-        <div className="category-header">
-          <h4>{item.category}</h4>
-          <div className="category-stats">
-            <span>{item.patients.toLocaleString()} patients</span>
-            <span>Avg. Age: {item.avgAge}</span>
-            <span className={`quality-badge quality-${item.quality.toLowerCase()}`}>
-              {item.quality} Quality
-            </span>
+    <div className="card">
+      <h3>Category Analysis</h3>
+      <div className="category-analysis">
+        {analyticsData.map((item, index) => (
+          <div key={index} className="category-item">
+            <div className="category-header">
+              <h4>{item.category}</h4>
+              <div className="category-stats">
+                <span>{item.patients.toLocaleString()} patients</span>
+                <span>Avg. Age: {item.avgAge}</span>
+                <span className={`quality-badge quality-${item.quality.toLowerCase()}`}>
+                  {item.quality} Quality
+                </span>
+              </div>
+            </div>
+
+            <div className="category-details">
+              <span>Completion: {item.completion}%</span>
+              <button className="view-details-btn">View Details →</button>
+            </div>
+
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{ width: `${item.completion}%` }}
+              ></div>
+            </div>
           </div>
-        </div>
-
-        
-
-        <div className="category-details">
-          <span>Completion: {item.completion}%</span>
-          <button className="view-details-btn">View Details →</button>
-        </div>
-
-        <div className="progress-bar">
-          <div 
-            className="progress-fill" 
-            style={{ width: `${item.completion}%` }}
-          ></div>
-        </div>
+        ))}
       </div>
-    ))}
-  </div>
-</div>
-
     </div>
-  );
+  </div>
+);
 
-const renderDataRequestsTab = () => (
+const renderDataRequestTab = (researcherDataRequests, setModal) => (
   <div className="tab-content">
     <div className="tab-header">
       <h2>Data Requests</h2>
       <button 
-        onClick={() => setModal('dataSearch')}
+        onClick={() => setModal('dataRequest')}
         className="btn-primary"
       >
-        <Search className="btn-icon" />
+        
         <span>New Request</span>
       </button>
     </div>
@@ -632,49 +823,138 @@ const renderDataRequestsTab = () => (
     <div className="card">
       <div className="requests-list">
         {researcherDataRequests.map((req) => (
-          <div key={req.id} className="request-item">
-            <div className="request-main">
-              <div className="request-header">
-                <h4 className="request-name">{req.requesterName}</h4>
-                <span className={`status-badge status-${req.status.replace(' ', '-').toLowerCase()}`}>
-                  {req.status}
-                </span>
-              </div>
-              <p className="request-detail">
-                <strong>Requested:</strong> {req.dataSourcesRequested.join(', ')}
-              </p>
-              {req.dataSourcesReceived.length > 0 && (
+          <React.Fragment key={req.id}>
+            <div className="request-item">
+              <div className="request-main">
+                <div className="request-header">
+                  <h4 className="request-name">{req.requesterName}</h4>
+                  <span className={`status-badge status-${req.status.replace(' ', '-').toLowerCase()}`}>
+                    {req.status}
+                  </span>
+                </div>
                 <p className="request-detail">
-                  <strong>Received:</strong> {req.dataSourcesReceived.join(', ')}
+                  <strong>Requested:</strong> {req.dataSourcesRequested.join(', ')}
                 </p>
-              )}
-              <div className="request-meta">
-                <span>{req.date}</span>
-                <span className="request-compensation">{req.compensation} ICP</span>
-              </div>
-            </div>
-            
-            <div className="request-actions">
-              {req.dataSourcesReceived.length > 0 && (
-                <button className="request-action-btn">
-                  <Download className="request-action-icon" />
-                </button>
-              )}
-              <button className="request-action-btn">
-                <Eye className="request-action-icon" />
-              </button>
-            </div>
-
-            {req.status.toLowerCase() === 'pending' && (
-              <div className="request-status">
-                <div className="request-status-content">
-                  <Clock className="request-status-icon" />
-                  <span>Waiting for patient approval</span>
+                {req.dataSourcesReceived.length > 0 && (
+                  <p className="request-detail">
+                    <strong>Received:</strong> {req.dataSourcesReceived.join(', ')}
+                  </p>
+                )}
+                <div className="request-meta">
+                  <span>{req.date}</span>
+                  <span className="request-compensation">{req.compensation} ICP</span>
                 </div>
               </div>
-            )}
-          </div>
+
+              <div className="request-actions">
+                {req.dataSourcesReceived.length > 0 && (
+                  <button className="request-action-btn">
+                    <Download className="request-action-icon" />
+                  </button>
+                )}
+                <button className="request-action-btn">
+                  <Eye className="request-action-icon" />
+                </button>
+              </div>
+
+              {req.status.toLowerCase() === 'pending' && (
+                <div className="request-status">
+                  <div className="request-status-content">
+                    <Clock className="request-status-icon" />
+                    <span>Waiting for patient approval</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </React.Fragment>
         ))}
+      </div>
+    </div>
+  </div>
+);
+
+const renderDataRequestsTab = () => (
+  <div className="tab-content">
+    <div className="tab-header">
+      <h2>Data Requests</h2>
+      <button 
+  onClick={() => setModal('dataRequest')}
+  className="btn btn-primary flex items-center gap-2"
+>
+  <Plus className="btn-icon" />
+  <span>New Request</span>
+</button>
+
+    </div>
+
+    <div className="card">
+      <div className="requests-list">
+        {researcherDataRequests.length === 0 ? (
+          <p className="empty-state">No requests submitted yet.</p>
+        ) : (
+          researcherDataRequests.map((req) => {
+            const isExpanded = expandedRequestId === req.id;
+
+            return (
+              <React.Fragment key={req.id}>
+                <div className="request-item">
+                  <div className="request-main">
+                    <div className="request-header">
+                      <h4 className="request-name">{req.studyTitle}</h4>
+                      <span className={`status-badge status-${req.status.replace(' ', '-').toLowerCase()}`}>
+                        {req.status}
+                      </span>
+                    </div>
+
+                    <div className="request-meta">
+                      <span>{req.date}</span>
+                      <span className="request-compensation">{req.compensation || '—'} ICP</span>
+                    </div>
+                  </div>
+                  
+                  <div className="request-actions">
+                    {req.dataSourcesReceived?.length > 0 && (
+                      <button className="request-action-btn">
+                        <Download className="request-action-icon" />
+                      </button>
+                    )}
+                    <button
+                      className="request-action-btn"
+                      onClick={() => setExpandedRequestId(isExpanded ? null : req.id)}
+                    >
+                      <Eye className="request-action-icon" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expandable Section */}
+                {isExpanded && (
+                  <div className="request-details-expanded">
+                    <p><strong>Reason:</strong> {req.reason}</p>
+                    <p><strong>Format:</strong> {req.format}</p>
+
+                    {req.ageRange && <p><strong>Age Range:</strong> {req.ageRange}</p>}
+                    {req.gender && <p><strong>Gender:</strong> {req.gender}</p>}
+                    {req.dataQuality && <p><strong>Data Quality:</strong> {req.dataQuality}</p>}
+                    
+                    {req.dataSourcesRequested?.length > 0 && (
+                      <p><strong>Requested Data:</strong> {req.dataSourcesRequested.join(', ')}</p>
+                    )}
+                    {req.dataSourcesReceived?.length > 0 && (
+                      <p><strong>Received:</strong> {req.dataSourcesReceived.join(', ')}</p>
+                    )}
+                    {req.status.toLowerCase() === 'pending' && (
+                      <div className="request-status">
+                        <Clock className="request-status-icon" />
+                        <span>Waiting for patient approval</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })
+        )}
       </div>
     </div>
   </div>
@@ -710,152 +990,129 @@ const renderDataRequestsTab = () => (
       {/* Tab Content */}
       {activeTab === 'overview' && renderOverviewTab()}
       {activeTab === 'studies' && renderStudiesTab()}
-      {activeTab === 'analytics' && renderAnalyticsTab()}
+      {activeTab === 'analytics' && analyticsData && renderAnalyticsTab(analyticsData)}
+
       {activeTab === 'requests' && renderDataRequestsTab()}
 
-      {/* Advanced Data Search Modal */}
-      {modal === 'dataSearch' && (
-        <div className="modal-overlay">
-          <div className="modal modal-large">
-            <div className="modal-header">
-              <h2>Advanced Data Search</h2>
-              <button
-                onClick={() => setModal(null)}
-                className="modal-close"
-              >
-                <X className="close-icon" />
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              {/* Search and Filters */}
-              <div className="search-filters">
-                <div className="form-group">
-                  <label className="form-label">Search Query</label>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by condition, provider, or document type..."
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Age Range</label>
-                  <select
-                    value={filters.ageRange}
-                    onChange={(e) => setFilters({...filters, ageRange: e.target.value})}
-                    className="form-select"
-                  >
-                    <option value="">All Ages</option>
-                    <option value="18-30">18-30</option>
-                    <option value="31-50">31-50</option>
-                    <option value="51-70">51-70</option>
-                    <option value="70+">70+</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Gender</label>
-                  <select
-                    value={filters.gender}
-                    onChange={(e) => setFilters({...filters, gender: e.target.value})}
-                    className="form-select"
-                  >
-                    <option value="">All Genders</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Data Quality</label>
-                  <select
-                    value={filters.dataQuality}
-                    onChange={(e) => setFilters({...filters, dataQuality: e.target.value})}
-                    className="form-select"
-                  >
-                    <option value="">All Quality Levels</option>
-                    <option value="high">High Quality</option>
-                    <option value="medium">Medium Quality</option>
-                    <option value="low">Low Quality</option>
-                  </select>
-                </div>
-              </div>
+      {/* Data Request Modal */}
+{modal === 'dataRequest' && (
+  <div className="modal-overlay">
+    <div className="modal modal-large">
+      <div className="modal-header">
+        <h2>Request Data Access</h2>
+        <button onClick={() => setModal(null)} className="modal-close">
+          <X className="close-icon" />
+        </button>
+      </div>
 
-              {/* Search Results */}
-              {searchResults.length > 0 && (
-                <div className="search-results">
-                  <h3>Search Results ({searchResults.length} found)</h3>
-                  <div className="results-container">
-                    <div className="results-list">
-                      {searchResults.map((item) => (
-                        <label key={item.id} className="result-item">
-                          <input
-                            type="checkbox"
-                            checked={selectedSources.includes(item.id)}
-                            onChange={() => toggleSourceSelection(item.id)}
-                            className="result-checkbox"
-                          />
-                          <div className="result-content">
-                            <h4 className="result-title">{item.title}</h4>
-                            <p className="result-meta">{item.type} • {item.provider}</p>
-                            <p className="result-description">{item.description}</p>
-                            <div className="result-badges">
-                              <span className="badge badge-blue">
-                                ${item.value}
-                              </span>
-                              <span className="badge badge-green">
-                                High Quality
-                              </span>
-                              <span className="result-date">{item.date}</span>
-                            </div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+      <div className="modal-body">
+        {/* Request Form */}
+        <div className="request-form">
+          <div className="form-group">
+            <label className="form-label">Request Title</label>
+            <input
+              type="text"
+              value={form.studyTitle}
+              onChange={(e) => setForm({ ...form, studyTitle: e.target.value })}
+              placeholder="Enter the title of your request"
+              className="form-input"
+            />
+          </div>
 
-              {/* Compensation */}
-              <div className="form-group">
-                <label className="form-label">
-                  Compensation Offer (ICP Tokens)
-                </label>
-                <input
-                  type="number"
-                  value={compensation}
-                  onChange={(e) => setCompensation(e.target.value)}
-                  placeholder="Enter compensation amount"
-                  className="form-input"
-                />
-                <p className="form-help">
-                  Recommended: ${selectedSources.length * 50} - ${selectedSources.length * 150}
-                </p>
-              </div>
+          <div className="form-group">
+            <label className="form-label">Reason for Request</label>
+            <textarea
+              value={form.reason}
+              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              placeholder="Explain why you're requesting this data"
+              className="form-textarea"
+            />
+          </div>
 
-              {/* Submit */}
-              <div className="modal-footer">
-                <div className="modal-footer-info">
-                  {selectedSources.length} data source{selectedSources.length !== 1 ? 's' : ''} selected
-                </div>
-                <div className="modal-footer-actions">
-                  <button
-                    onClick={() => setModal(null)}
-                    className="btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSubmitRequest}
-                    disabled={!compensation || selectedSources.length === 0}
-                    className="btn-primary"
-                  >
-                    Submit Request
-                  </button>
-                </div>
-              </div>
-            </div>
+          {/* Optional Filters */}
+          <div className="form-group">
+            <label className="form-label">Age Range</label>
+            <select
+              value={form.ageRange}
+              onChange={(e) => setForm({ ...form, ageRange: e.target.value })}
+              className="form-select"
+            >
+              <option value="">All Ages</option>
+              <option value="18-30">18-30</option>
+              <option value="31-50">31-50</option>
+              <option value="51-70">51-70</option>
+              <option value="70+">70+</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Gender</label>
+            <select
+              value={form.gender}
+              onChange={(e) => setForm({ ...form, gender: e.target.value })}
+              className="form-select"
+            >
+              <option value="">All Genders</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Data Quality</label>
+            <select
+              value={form.dataQuality}
+              onChange={(e) => setForm({ ...form, dataQuality: e.target.value })}
+              className="form-select"
+            >
+              <option value="">Any Quality</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Preferred Format</label>
+            <select
+              value={form.format}
+              onChange={(e) => setForm({ ...form, format: e.target.value })}
+              className="form-select"
+            >
+              <option value="">Select format</option>
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+              <option value="pdf">PDF</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Deadline</label>
+            <input
+              type="date"
+              value={form.deadline}
+              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-actions">
+            <button
+              onClick={handleSubmitRequest}
+              className="btn btn-primary"
+            >
+              Submit Request
+            </button>
+            <button
+              onClick={() => setModal(null)}
+              className="btn btn-secondary"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+         </div>
           </div>
         </div>
       )}
@@ -926,6 +1183,45 @@ const renderDataRequestsTab = () => (
                   className="form-input"
                 />
               </div>
+              <div className="form-group">
+  <label className="form-label">Select Collaborators</label>
+  <input
+    type="text"
+    value={searchCollaborators}
+    onChange={(e) => setSearchCollaborators(e.target.value)}
+    placeholder="Search collaborators..."
+    className="form-input"
+  />
+
+  <div className="collaborator-list">
+    {collaborators
+      .filter(user =>
+        user &&
+        user.name &&
+        user.email &&
+        user.role &&
+        (user.role === 'provider' || user.role === 'researcher') &&
+        user.name.toLowerCase().includes(searchCollaborators.trim().toLowerCase())
+      )
+      .map(user => {
+        const { name, email, role } = user;
+
+        return (
+          <label key={email} className="checkbox-item">
+           <input
+  type="checkbox"
+  name={`collab-${email}`}
+  checked={(collaborationForm.collaborators || []).includes(user.email)}
+  onChange={() => toggleCollaborator(email)}
+  className="checkbox-input"
+/>
+            <span className="checkbox-label">{name} ({role})</span>
+          </label>
+        );
+      })}
+  </div>
+</div>
+
 
               <div className="form-group">
                 <label className="form-label">Data Types of Interest</label>

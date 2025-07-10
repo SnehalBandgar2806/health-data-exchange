@@ -45,6 +45,30 @@ fn upload_document(
     handlers::upload_document(file_name, doc_type, subtype, file_content, doctor_name)
 }
 
+#[query]
+fn get_all_collaborators() -> Vec<UserPublic> {
+    handlers::get_all_collaborators()
+}
+
+#[update]
+fn submit_data_request(request: models::DataRequest) {
+    handlers::submit_data_request(request)
+}
+
+#[query]
+fn get_data_requests_by_email(email: String) -> Vec<models::DataRequest> {
+    handlers::get_data_requests_by_email(email)
+}
+
+#[query]
+fn get_sent_requests_by_email(email: String) -> Vec<models::DataRequest> {
+    handlers::get_sent_requests_by_email(email)
+}
+
+#[update]
+fn update_data_request_status(id: String, new_status: String) -> Result<(), String> {
+    handlers::update_data_request_status(id, new_status)
+}
 
 #[update]
 fn delete_upload(hash: String) -> Result<(), String> {
@@ -60,4 +84,20 @@ fn get_uploads_for_doctor() -> Vec<models::UploadBlock> {
 #[query]
 fn get_all_doctors() -> Vec<UserPublic> {
     handlers::get_all_doctors()
+}
+
+
+#[update]
+fn add_study_for_user(study: models::ResearchStudy) -> Result<(), String> {
+    handlers::add_study_for_user(study)
+}
+
+#[query]
+fn get_studies_by_user() -> Vec<models::ResearchStudy> {
+    handlers::get_studies_by_user()
+}
+
+#[update]
+fn delete_study_by_id(study_id: String) -> Result<(), String> {
+    handlers::delete_study_by_id(study_id)
 }

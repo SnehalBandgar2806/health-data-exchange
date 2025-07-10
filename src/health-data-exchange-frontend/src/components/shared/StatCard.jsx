@@ -9,6 +9,8 @@ const StatCard = ({ title, value, icon: Icon, trend, color = 'blue' }) => {
     yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200'
   };
 
+  
+
   return (
     <div className="bg-white border rounded-xl shadow-sm p-6 hover:shadow-md transition">
       <div className="flex items-center justify-between">

@@ -12,10 +12,11 @@ import { healthRecords, dataRequests } from '../../utils/mockData';
 import './patient.css';
 import MyUploadsTable from './MyUploadsTable';
 import { HttpAgent } from '@dfinity/agent';
-import { createActor } from '../../../../declarations/health-data-exchange-backend';
+
 import { AuthClient } from '@dfinity/auth-client';
 
-const canisterId = import.meta.env.VITE_CANISTER_ID_HEALTH_DATA_EXCHANGE_BACKEND;
+import { createActor } from '../../../../declarations/health-data-exchange-backend';
+const canisterId = import.meta.env.VITE_CANISTER_ID_HEALTH_DATA_EXCHANGE_BACKEND; 
 
 const PatientDashboard = ({ viewMode = 'dashboard', onBackToDashboard }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -63,7 +64,7 @@ const filteredSchemes = schemes.filter(scheme =>
 
   const MAX_FILE_SIZE_MB = 1.9;
 
-useEffect(() => {
+ useEffect(() => {
   const fetchUploadsAndEarnings = async () => {
     try {
       const authClient = await AuthClient.create();
@@ -79,22 +80,15 @@ useEffect(() => {
       const actor = createActor(canisterId, { agent });
 
       const uploads = await actor.get_my_uploads();
-      
       const total = uploads.reduce((sum, item) => sum + Number(item.earning_icp || 0), 0);
       setTotalEarnings(total);
-
-      // ✅ NEW LINE: Also set the uploaded document count here
-      setSharedRecords(uploads.length);
-
     } catch (err) {
-      console.error("Error fetching uploads for earnings/count:", err);
+      console.error("Error fetching uploads for earnings:", err);
       setTotalEarnings(0);
-      setSharedRecords(0); // fallback
     }
   };
   fetchUploadsAndEarnings();
 }, []);
-
 
 
 
